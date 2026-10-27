@@ -1,0 +1,16 @@
+# Neo4j local para desarrollo. Las credenciales se toman de las variables de
+# entorno NEO4J_USERNAME / NEO4J_PASSWORD (o del archivo .env, que NO se versiona).
+services:
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: neo4j-logistica
+    ports:
+      - "7474:7474"   # Neo4j Browser
+      - "7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: "${NEO4J_USERNAME:?definí NEO4J_USERNAME}/${NEO4J_PASSWORD:?definí NEO4J_PASSWORD}"
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  neo4j_data:

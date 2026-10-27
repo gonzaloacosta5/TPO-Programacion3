@@ -1,0 +1,638 @@
+{
+  "info": {
+    "name": "TPO Logística Perfumería",
+    "description": "Todos los endpoints de la API con tests. Los valores esperados son los de la red semilla (12 nodos, 17 rutas, 8 cajas) documentados en docs/ENDPOINTS.md. Requiere la API corriendo en {{baseUrl}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('[general] responde JSON', function () {",
+          "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+          "});",
+          "pm.test('[general] nunca un 500 ni un stack trace', function () {",
+          "    pm.expect(pm.response.code).to.not.equal(500);",
+          "    pm.expect(pm.response.text()).to.not.match(/at (com|org|java)\\.[\\w.$]+\\(/);",
+          "    pm.expect(pm.response.text()).to.not.include('Exception');",
+          "});",
+          "pm.test('[general] responde en menos de 3 s', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Datos del grafo",
+      "item": [
+        {
+          "name": "Resumen",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/grafo/resumen" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('12 nodos, 17 rutas, 8 cajas', () => {",
+            "    pm.expect(r.vertices).to.eql(12);",
+            "    pm.expect(r.aristas).to.eql(17);",
+            "    pm.expect(r.paquetes).to.eql(8);",
+            "});",
+            "pm.test('Nodos por tipo: 2 depósitos, 5 centros, 5 retiros', () => {",
+            "    pm.expect(r.nodosPorTipo).to.eql({ DEPOSITO: 2, CENTRO_DISTRIBUCION: 5, PUNTO_RETIRO: 5 });",
+            "});",
+            "pm.test('Grafo no dirigido, costo en minutos', () => {",
+            "    pm.expect(r.dirigido).to.eql(false);",
+            "    pm.expect(r.unidadCosto).to.eql('minutos');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Nodos",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/grafo/nodos" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Devuelve los 12 nodos', () => pm.expect(r).to.be.an('array').with.lengthOf(12));",
+            "pm.test('Incluye CABA y CORRIENTES', () => {",
+            "    const txt = JSON.stringify(r);",
+            "    pm.expect(txt).to.include('CABA');",
+            "    pm.expect(txt).to.include('CORRIENTES');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Rutas",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/grafo/rutas" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Devuelve las 17 rutas', () => pm.expect(r).to.be.an('array').with.lengthOf(17));",
+            "pm.test('Cada ruta tiene origen, destino y minutos > 0', () => {",
+            "    r.forEach(x => {",
+            "        pm.expect(x).to.have.all.keys('origenId', 'destinoId', 'minutos');",
+            "        pm.expect(x.minutos).to.be.above(0);",
+            "    });",
+            "});",
+            "pm.test('Suma total de minutos = 1887', () => {",
+            "    pm.expect(r.reduce((s, x) => s + x.minutos, 0)).to.eql(1887);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Paquetes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/grafo/paquetes" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Devuelve las 8 cajas', () => pm.expect(r).to.be.an('array').with.lengthOf(8));",
+            "pm.test('PQ-01: 8 kg, 520 USD, destino QUILMES', () => {",
+            "    const p = r.find(x => x.id === 'PQ-01');",
+            "    pm.expect(p).to.include({ pesoKg: 8, valor: 520, destinoId: 'QUILMES' });",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "1-2. Recorridos (BFS y DFS)",
+      "item": [
+        {
+          "name": "BFS desde CABA",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/recorridos/bfs?origen=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Orden de visita por niveles', () => {",
+            "    pm.expect(r.ordenVisita).to.eql(['CABA','CAMPANA','LOMAS_DE_ZAMORA','PILAR','QUILMES','ROSARIO','ZARATE','LA_PLATA','PARANA','SANTA_FE','CORRIENTES','RESISTENCIA']);",
+            "});",
+            "pm.test('Saltos mínimos correctos', () => {",
+            "    pm.expect(r.saltosDesdeOrigen).to.include({ CABA: 0, QUILMES: 1, ZARATE: 2, SANTA_FE: 2, CORRIENTES: 3, RESISTENCIA: 3 });",
+            "});",
+            "pm.test('Visita los 12 nodos', () => {",
+            "    pm.expect(r.nodosVisitados).to.eql(12);",
+            "    pm.expect(r.nodosNoAlcanzados).to.eql(0);",
+            "});",
+            "pm.test('Árbol de padres con 11 entradas', () => pm.expect(Object.keys(r.padres)).to.have.lengthOf(11));"
+          ]}}]
+        },
+        {
+          "name": "BFS acepta minúsculas y tildes (\"zárate\")",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/recorridos/bfs?origen=z%C3%A1rate" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Normaliza el origen a ZARATE', () => pm.expect(r.origen).to.eql('ZARATE'));",
+            "pm.test('Empieza por ZARATE', () => pm.expect(r.ordenVisita[0]).to.eql('ZARATE'));"
+          ]}}]
+        },
+        {
+          "name": "DFS desde CABA",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/recorridos/dfs?origen=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Preorden correcto', () => {",
+            "    pm.expect(r.ordenVisita).to.eql(['CABA','CAMPANA','PILAR','ZARATE','ROSARIO','PARANA','CORRIENTES','RESISTENCIA','SANTA_FE','LOMAS_DE_ZAMORA','LA_PLATA','QUILMES']);",
+            "});",
+            "pm.test('Postorden correcto (CABA termina último)', () => {",
+            "    pm.expect(r.ordenFinalizacion).to.eql(['PILAR','SANTA_FE','RESISTENCIA','CORRIENTES','PARANA','ROSARIO','ZARATE','CAMPANA','QUILMES','LA_PLATA','LOMAS_DE_ZAMORA','CABA']);",
+            "});",
+            "pm.test('Visita los 12 nodos', () => pm.expect(r.nodosVisitados).to.eql(12));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "3. Dijkstra",
+      "item": [
+        {
+          "name": "CABA → CORRIENTES",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/dijkstra?origen=CABA&destino=CORRIENTES" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Alcanzable, 747 minutos, 4 saltos', () => {",
+            "    pm.expect(r.alcanzable).to.eql(true);",
+            "    pm.expect(r.costoMinutos).to.eql(747);",
+            "    pm.expect(r.saltos).to.eql(4);",
+            "});",
+            "pm.test('Camino por Rosario, Santa Fe y Resistencia', () => {",
+            "    pm.expect(r.camino).to.eql(['CABA','ROSARIO','SANTA_FE','RESISTENCIA','CORRIENTES']);",
+            "});",
+            "pm.test('La suma de los tramos da el costo', () => {",
+            "    pm.expect(r.tramos.reduce((s, t) => s + t.minutos, 0)).to.eql(r.costoMinutos);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "CABA → LA_PLATA (dos caminos posibles)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/dijkstra?origen=CABA&destino=la%20plata" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('85 minutos por Quilmes (no 92 por Lomas)', () => {",
+            "    pm.expect(r.costoMinutos).to.eql(85);",
+            "    pm.expect(r.camino).to.eql(['CABA','QUILMES','LA_PLATA']);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Origen = destino",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/dijkstra?origen=CABA&destino=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Costo 0 y 0 saltos', () => {",
+            "    pm.expect(r.costoMinutos).to.eql(0);",
+            "    pm.expect(r.saltos).to.eql(0);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "4-5. Árbol de expansión mínima (Prim y Kruskal)",
+      "item": [
+        {
+          "name": "Prim desde CABA",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/mst/prim?origen=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Costo 907, 11 aristas, 12 nodos, conexo', () => {",
+            "    pm.expect(r.costoTotalMinutos).to.eql(907);",
+            "    pm.expect(r.aristasEnArbol).to.eql(11);",
+            "    pm.expect(r.nodosCubiertos).to.eql(12);",
+            "    pm.expect(r.conexo).to.eql(true);",
+            "});",
+            "pm.test('La suma de las aristas da 907', () => {",
+            "    pm.expect(r.aristas.reduce((s, a) => s + a.minutos, 0)).to.eql(907);",
+            "});",
+            "pm.test('Crece desde CABA: primera arista CABA–LOMAS (32)', () => {",
+            "    pm.expect(r.aristas[0]).to.eql({ desde: 'CABA', hasta: 'LOMAS_DE_ZAMORA', minutos: 32 });",
+            "});",
+            "// Guarda las aristas para compararlas con Kruskal",
+            "const clave = a => [a.desde, a.hasta].sort().join('-') + ':' + a.minutos;",
+            "pm.collectionVariables.set('aristasPrim', JSON.stringify(r.aristas.map(clave).sort()));"
+          ]}}]
+        },
+        {
+          "name": "Prim desde CORRIENTES (mismo árbol)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/mst/prim?origen=CORRIENTES" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Mismo costo desde otro origen (árbol único)', () => pm.expect(r.costoTotalMinutos).to.eql(907));",
+            "pm.test('Primera arista RESISTENCIA–CORRIENTES (22)', () => pm.expect(r.aristas[0].minutos).to.eql(22));"
+          ]}}]
+        },
+        {
+          "name": "Kruskal",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/mst/kruskal" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Costo 907, 11 aristas, conexo, sin origen', () => {",
+            "    pm.expect(r.costoTotalMinutos).to.eql(907);",
+            "    pm.expect(r.aristasEnArbol).to.eql(11);",
+            "    pm.expect(r.conexo).to.eql(true);",
+            "    pm.expect(r.origen).to.eql(null);",
+            "});",
+            "pm.test('Agrega las aristas en orden creciente de peso', () => {",
+            "    pm.expect(r.aristas.map(a => a.minutos)).to.eql([20, 22, 25, 28, 32, 35, 45, 55, 105, 120, 420]);",
+            "});",
+            "pm.test('Descarta las que cierran ciclo (40, 60, 80, 150, 200, 450)', () => {",
+            "    const pesos = r.aristas.map(a => a.minutos);",
+            "    [40, 60, 80, 150, 200, 450].forEach(p => pm.expect(pesos).to.not.include(p));",
+            "});",
+            "pm.test('Mismas aristas que Prim (correr Prim antes)', () => {",
+            "    const prim = pm.collectionVariables.get('aristasPrim');",
+            "    if (!prim) { return; }",
+            "    const clave = a => [a.desde, a.hasta].sort().join('-') + ':' + a.minutos;",
+            "    pm.expect(JSON.stringify(r.aristas.map(clave).sort())).to.eql(prim);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "6-7. Ordenamiento (QuickSort y MergeSort)",
+      "item": [
+        {
+          "name": "QuickSort por valor desc",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/ordenar/quicksort?criterio=valor&orden=desc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Orden por valor de mayor a menor', () => {",
+            "    pm.expect(r.paquetes.map(p => p.id)).to.eql(['PQ-04','PQ-03','PQ-07','PQ-05','PQ-02','PQ-01','PQ-06','PQ-08']);",
+            "});",
+            "pm.test('Valores no crecientes', () => {",
+            "    for (let i = 1; i < r.paquetes.length; i++) pm.expect(r.paquetes[i - 1].valor).to.be.at.least(r.paquetes[i].valor);",
+            "});",
+            "pm.test('Informa comparaciones (32)', () => pm.expect(r.comparaciones).to.eql(32));"
+          ]}}]
+        },
+        {
+          "name": "MergeSort por peso asc",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/ordenar/mergesort?criterio=peso&orden=asc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Orden por peso de menor a mayor', () => {",
+            "    pm.expect(r.paquetes.map(p => p.id)).to.eql(['PQ-08','PQ-01','PQ-07','PQ-02','PQ-05','PQ-03','PQ-06','PQ-04']);",
+            "});",
+            "pm.test('Informa comparaciones (17)', () => pm.expect(r.comparaciones).to.eql(17));"
+          ]}}]
+        },
+        {
+          "name": "QuickSort y MergeSort coinciden (ratio desc)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/ordenar/quicksort?criterio=ratio&orden=desc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Ordena por valor/peso: PQ-07 primero', () => pm.expect(r.paquetes[0].id).to.eql('PQ-07'));",
+            "pm.sendRequest(pm.collectionVariables.get('baseUrl') + '/api/paquetes/ordenar/mergesort?criterio=ratio&orden=desc', (err, res) => {",
+            "    pm.test('MergeSort devuelve exactamente el mismo orden', () => {",
+            "        pm.expect(err).to.eql(null);",
+            "        pm.expect(res.json().paquetes.map(p => p.id)).to.eql(r.paquetes.map(p => p.id));",
+            "    });",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "8-9. Greedy y Mochila 0/1",
+      "item": [
+        {
+          "name": "Greedy 40 kg",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/greedy?capacidadKg=40" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Greedy carga 1870 USD en 36 kg', () => {",
+            "    pm.expect(r.greedy.valorTotal).to.eql(1870);",
+            "    pm.expect(r.greedy.pesoTotalKg).to.eql(36);",
+            "});",
+            "pm.test('No supera la capacidad', () => pm.expect(r.greedy.pesoTotalKg).to.be.at.most(40));",
+            "pm.test('Orden considerado por ratio', () => {",
+            "    pm.expect(r.greedy.ordenConsiderado).to.eql(['PQ-07','PQ-01','PQ-02','PQ-03','PQ-05','PQ-04','PQ-08','PQ-06']);",
+            "});",
+            "pm.test('No es óptimo: pierde 90 USD contra la mochila (1960)', () => {",
+            "    pm.expect(r.comparacionConOptimo.valorOptimoMochila).to.eql(1960);",
+            "    pm.expect(r.comparacionConOptimo.valorPerdidoPorElGreedy).to.eql(90);",
+            "    pm.expect(r.comparacionConOptimo.greedyEsOptimo).to.eql(false);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Greedy contraejemplo",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/greedy/contraejemplo" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Capacidad 50 kg y 3 cajas', () => {",
+            "    pm.expect(r.capacidadKg).to.eql(50);",
+            "    pm.expect(r.juegoDeDatos).to.have.lengthOf(3);",
+            "});",
+            "pm.test('Greedy 160 USD vs óptimo 220 USD', () => {",
+            "    pm.expect(r.greedy.valorTotal).to.eql(160);",
+            "    pm.expect(r.optimo.valorOptimo).to.eql(220);",
+            "    pm.expect(r.valorPerdidoPorElGreedy).to.eql(60);",
+            "});",
+            "pm.test('Incluye explicación', () => pm.expect(r.explicacion).to.be.a('string').and.not.empty);"
+          ]}}]
+        },
+        {
+          "name": "Mochila 40 kg",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/mochila?capacidadKg=40" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Valor óptimo 1960 USD en 40 kg', () => {",
+            "    pm.expect(r.valorOptimo).to.eql(1960);",
+            "    pm.expect(r.pesoTotalKg).to.eql(40);",
+            "});",
+            "pm.test('Carga PQ-02, PQ-03 y PQ-07', () => {",
+            "    pm.expect(r.paquetesCargados.map(p => p.id).sort()).to.eql(['PQ-02','PQ-03','PQ-07']);",
+            "});",
+            "pm.test('Las cajas cargadas suman el valor y el peso informados', () => {",
+            "    pm.expect(r.paquetesCargados.reduce((s, p) => s + p.valor, 0)).to.eql(r.valorOptimo);",
+            "    pm.expect(r.paquetesCargados.reduce((s, p) => s + p.pesoKg, 0)).to.eql(r.pesoTotalKg);",
+            "});",
+            "pm.test('Sin tabla si no se pide', () => pm.expect(r.tablaDp).to.eql(null));"
+          ]}}]
+        },
+        {
+          "name": "Mochila 40 kg con tabla dp",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/mochila?capacidadKg=40&incluirTabla=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Tabla de 9 × 41', () => {",
+            "    pm.expect(r.tablaDp).to.have.lengthOf(9);",
+            "    r.tablaDp.forEach(f => pm.expect(f).to.have.lengthOf(41));",
+            "});",
+            "pm.test('Fila 0 todo ceros', () => pm.expect(r.tablaDp[0].every(v => v === 0)).to.eql(true));",
+            "pm.test('dp[8][40] = 1960', () => pm.expect(r.tablaDp[8][40]).to.eql(1960));",
+            "pm.test('Fila 3 en w = 0, 8, 16, 24, 32, 40', () => {",
+            "    pm.expect([0, 8, 16, 24, 32, 40].map(w => r.tablaDp[3][w])).to.eql([0, 520, 540, 1060, 1300, 1820]);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Mochila capacidad 0",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/mochila?capacidadKg=0" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('No carga nada', () => {",
+            "    pm.expect(r.valorOptimo).to.eql(0);",
+            "    pm.expect(r.paquetesCargados).to.have.lengthOf(0);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "10. Floyd-Warshall",
+      "item": [
+        {
+          "name": "Todos contra todos",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/floyd-warshall" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "const fw = r.floydWarshall;",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Sin ciclo negativo', () => pm.expect(fw.tieneCicloNegativo).to.eql(false));",
+            "pm.test('Matriz 12 × 12 con diagonal en 0', () => {",
+            "    pm.expect(fw.matrizCostos).to.have.lengthOf(12);",
+            "    fw.matrizCostos.forEach((f, i) => { pm.expect(f).to.have.lengthOf(12); pm.expect(f[i]).to.eql(0); });",
+            "});",
+            "pm.test('Fila de CABA correcta', () => {",
+            "    pm.expect(fw.matrizCostos[0]).to.eql([0, 80, 747, 85, 32, 333, 55, 40, 725, 200, 305, 100]);",
+            "});",
+            "pm.test('Matriz simétrica (grafo no dirigido)', () => {",
+            "    for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) pm.expect(fw.matrizCostos[i][j]).to.eql(fw.matrizCostos[j][i]);",
+            "});",
+            "pm.test('V³ = 1728 iteraciones', () => pm.expect(fw.iteracionesInternas).to.eql(1728));",
+            "pm.test('Coincide con Dijkstra corrido V veces', () => {",
+            "    pm.expect(r.comparacionConDijkstraVVeces.resultadosCoinciden).to.eql(true);",
+            "    pm.expect(r.comparacionConDijkstraVVeces.dijkstraEjecuciones).to.eql(12);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Camino CABA → CORRIENTES",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/floyd-warshall/camino?origen=CABA&destino=CORRIENTES" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Mismo resultado que Dijkstra: 747 min', () => {",
+            "    pm.expect(r.costoMinutos).to.eql(747);",
+            "    pm.expect(r.camino).to.eql(['CABA','ROSARIO','SANTA_FE','RESISTENCIA','CORRIENTES']);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Demo ciclo negativo",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/floyd-warshall/demo-ciclo-negativo" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Detecta el ciclo A→B→C→A', () => {",
+            "    pm.expect(r.tieneCicloNegativo).to.eql(true);",
+            "    pm.expect(r.nodosEnCicloNegativo).to.eql(['A','B','C']);",
+            "});",
+            "pm.test('D no está en el ciclo', () => pm.expect(r.nodosEnCicloNegativo).to.not.include('D'));",
+            "pm.test('No devuelve matrices (caminos no definidos)', () => {",
+            "    pm.expect(r.matrizCostos).to.eql(null);",
+            "    pm.expect(r.matrizSiguiente).to.eql(null);",
+            "});",
+            "pm.test('4³ = 64 iteraciones', () => pm.expect(r.iteracionesInternas).to.eql(64));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "11. Backtracking",
+      "item": [
+        {
+          "name": "CABA → QUILMES (100 min, 3 saltos)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/backtracking/rutas?origen=CABA&destino=QUILMES&maxMinutos=100&maxSaltos=3" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('2 rutas válidas', () => pm.expect(r.totalRutasValidas).to.eql(2));",
+            "pm.test('Mejor ruta: directa, 40 min', () => {",
+            "    pm.expect(r.mejorRuta).to.eql({ camino: ['CABA','QUILMES'], minutos: 40, saltos: 1 });",
+            "});",
+            "pm.test('Todas respetan los topes', () => {",
+            "    r.rutas.forEach(x => { pm.expect(x.minutos).to.be.at.most(100); pm.expect(x.saltos).to.be.at.most(3); });",
+            "});",
+            "pm.test('La poda explora 9 nodos contra 60 (85 % menos)', () => {",
+            "    pm.expect(r.nodosExploradosConPoda).to.eql(9);",
+            "    pm.expect(r.nodosExploradosSinPoda).to.eql(60);",
+            "    pm.expect(r.reduccionPorcentual).to.eql(85.0);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "CABA → CORRIENTES (800 min, 6 saltos)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/backtracking/rutas?origen=CABA&destino=CORRIENTES&maxMinutos=800&maxSaltos=6" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('4 rutas: 747, 767, 783 y 800 min', () => {",
+            "    pm.expect(r.totalRutasValidas).to.eql(4);",
+            "    pm.expect(r.rutas.map(x => x.minutos)).to.eql([747, 767, 783, 800]);",
+            "});",
+            "pm.test('43 nodos con poda vs 53 sin poda', () => {",
+            "    pm.expect(r.nodosExploradosConPoda).to.eql(43);",
+            "    pm.expect(r.nodosExploradosSinPoda).to.eql(53);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "CABA → CORRIENTES sin topes (todas las rutas)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/backtracking/rutas?origen=CABA&destino=CORRIENTES&maxMinutos=5000&maxSaltos=11" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Existen 12 rutas simples', () => pm.expect(r.totalRutasValidas).to.eql(12));",
+            "pm.test('Sin nada que podar, ambos conteos coinciden (53)', () => {",
+            "    pm.expect(r.nodosExploradosConPoda).to.eql(53);",
+            "    pm.expect(r.nodosExploradosSinPoda).to.eql(53);",
+            "});",
+            "pm.test('Ninguna ruta repite nodos', () => {",
+            "    r.rutas.forEach(x => pm.expect(new Set(x.camino).size).to.eql(x.camino.length));",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "12. Branch & Bound",
+      "item": [
+        {
+          "name": "CABA → QUILMES, LA_PLATA, PILAR",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Costo óptimo 280 min', () => pm.expect(r.costoTotalMinutos).to.eql(280));",
+            "pm.test('Sale y vuelve a CABA pasando por los 3 destinos', () => {",
+            "    pm.expect(r.ordenDeEntrega[0]).to.eql('CABA');",
+            "    pm.expect(r.ordenDeEntrega[r.ordenDeEntrega.length - 1]).to.eql('CABA');",
+            "    ['QUILMES','LA_PLATA','PILAR'].forEach(d => pm.expect(r.ordenDeEntrega).to.include(d));",
+            "});",
+            "pm.test('Poda: explora 8 de 16 nodos', () => {",
+            "    pm.expect(r.nodosExplorados).to.eql(8);",
+            "    pm.expect(r.nodosArbolCompleto).to.eql(16);",
+            "    pm.expect(r.cotaActivada).to.eql(true);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Destinos de las cajas (8 destinos)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/reparto/branch-and-bound" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Usa los 8 destinos de las cajas', () => pm.expect(r.destinos).to.have.lengthOf(8));",
+            "pm.test('Óptimo 1701 min (mejor que la solución inicial 1711)', () => {",
+            "    pm.expect(r.costoTotalMinutos).to.eql(1701);",
+            "    pm.expect(r.costoSolucionInicial).to.eql(1711);",
+            "});",
+            "pm.test('Explora menos del 5 % del árbol', () => {",
+            "    pm.expect(r.nodosArbolCompleto).to.eql(109601);",
+            "    pm.expect(r.porcentajeDelArbolExplorado).to.be.below(5);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Errores",
+      "item": [
+        {
+          "name": "404 nodo inexistente",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/recorridos/bfs?origen=ATLANTIDA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+            "pm.test('Formato de error uniforme', () => {",
+            "    pm.expect(r).to.include.keys('timestamp', 'estado', 'error', 'mensaje', 'ruta');",
+            "    pm.expect(r.estado).to.eql(404);",
+            "});",
+            "pm.test('El mensaje nombra el nodo y lista los disponibles', () => {",
+            "    pm.expect(r.mensaje).to.include('ATLANTIDA');",
+            "    pm.expect(r.mensaje).to.include('CABA');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "400 falta parámetro obligatorio",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/caminos/dijkstra?origen=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('Avisa qué parámetro falta', () => pm.expect(r.mensaje).to.include('destino'));"
+          ]}}]
+        },
+        {
+          "name": "400 parámetro mal formado",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/mochila?capacidadKg=mucho" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('Formato de error uniforme', () => pm.expect(pm.response.json().estado).to.eql(400));"
+          ]}}]
+        },
+        {
+          "name": "400 capacidad negativa",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/greedy?capacidadKg=-5" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}]
+        },
+        {
+          "name": "400 criterio de orden inválido",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/paquetes/ordenar/quicksort?criterio=color" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}]
+        },
+        {
+          "name": "400 backtracking con origen = destino",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/backtracking/rutas?origen=CABA&destino=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}]
+        },
+        {
+          "name": "404 endpoint inexistente",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/no-existe" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+            "pm.test('Formato de error uniforme', () => pm.expect(pm.response.json().estado).to.eql(404));"
+          ]}}]
+        },
+        {
+          "name": "405 método no permitido",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/mst/kruskal" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('405 Method Not Allowed', () => pm.response.to.have.status(405));",
+            "pm.test('Formato de error uniforme', () => pm.expect(pm.response.json().estado).to.eql(405));"
+          ]}}]
+        }
+      ]
+    }
+  ]
+}
