@@ -1,4 +1,4 @@
-# Endpoints y fichas de algoritmos
+﻿# Endpoints y fichas de algoritmos
 
 Red logística de un e-commerce de perfumería. Todos los ejemplos de respuesta de este documento son la
 salida **real** de los servicios sobre los datos semilla (12 nodos, 17 rutas, 8 cajas); donde una respuesta es
@@ -42,7 +42,7 @@ muy larga se indica "(abreviado)".
 Cantidad de vértices, aristas y paquetes cargados en Neo4j. Es el chequeo de que el entorno está funcionando.
 
 ```bash
-curl "http://localhost:8081/api/grafo/resumen"
+curl "http://localhost:8080/api/grafo/resumen"
 ```
 
 ```json
@@ -75,7 +75,7 @@ en orden alfabético, así que el resultado es determinista. Informa los **salto
 de padres.
 
 ```bash
-curl "http://localhost:8081/api/recorridos/bfs?origen=CABA"
+curl "http://localhost:8080/api/recorridos/bfs?origen=CABA"
 ```
 
 ```json
@@ -115,7 +115,7 @@ Mismos parámetros que BFS. Devuelve el orden de descubrimiento (preorden), el o
 y el árbol de padres.
 
 ```bash
-curl "http://localhost:8081/api/recorridos/dfs?origen=CABA"
+curl "http://localhost:8080/api/recorridos/dfs?origen=CABA"
 ```
 
 ```json
@@ -156,7 +156,7 @@ sus minutos, y cuántos nodos expandió y aristas examinó. Si el destino no es 
 `"alcanzable": false`.
 
 ```bash
-curl "http://localhost:8081/api/caminos/dijkstra?origen=CABA&destino=CORRIENTES"
+curl "http://localhost:8080/api/caminos/dijkstra?origen=CABA&destino=CORRIENTES"
 ```
 
 ```json
@@ -208,7 +208,7 @@ Conecta todos los nodos con el menor tiempo de ruta total (por ejemplo, para dec
 mantener). Si el grafo no es conexo solo cubre la componente del origen y devuelve `"conexo": false`.
 
 ```bash
-curl "http://localhost:8081/api/mst/prim?origen=CABA"
+curl "http://localhost:8080/api/mst/prim?origen=CABA"
 ```
 
 ```json
@@ -252,7 +252,7 @@ Sin parámetros. Ordena todas las aristas por peso y las agrega en ese orden si 
 conexo devuelve un **bosque** de expansión mínima (`"conexo": false`).
 
 ```bash
-curl "http://localhost:8081/api/mst/kruskal"
+curl "http://localhost:8080/api/mst/kruskal"
 ```
 
 ```json
@@ -311,7 +311,7 @@ mismo orden para los mismos parámetros. Informan `comparaciones`: cuántas vece
 ver el comportamiento n log n en vez de solo afirmarlo.
 
 ```bash
-curl "http://localhost:8081/api/paquetes/ordenar/quicksort?criterio=valor&orden=desc"
+curl "http://localhost:8080/api/paquetes/ordenar/quicksort?criterio=valor&orden=desc"
 ```
 
 ```json
@@ -366,7 +366,7 @@ Ordena las cajas por valor/peso de mayor a menor (con MergeSort propio) y carga 
 respuesta incluye la comparación con el óptimo de la mochila 0/1, para ver cuánto pierde el greedy.
 
 ```bash
-curl "http://localhost:8081/api/paquetes/greedy?capacidadKg=40"
+curl "http://localhost:8080/api/paquetes/greedy?capacidadKg=40"
 ```
 
 ```json
@@ -446,7 +446,7 @@ Las cajas elegidas se **recuperan** recorriendo la tabla desde `dp[n][W]` hacia 
 caja `i` fue tomada y se continúa con `w - peso_i`.
 
 ```bash
-curl "http://localhost:8081/api/paquetes/mochila?capacidadKg=40"
+curl "http://localhost:8080/api/paquetes/mochila?capacidadKg=40"
 ```
 
 ```json
@@ -487,7 +487,7 @@ Sin parámetros. Calcula el tiempo mínimo entre **todos** los pares de nodos y 
 de caminos** con la que se reconstruye cualquiera) y, para el hito 7, una `comparacionConDijkstraVVeces`.
 
 ```bash
-curl "http://localhost:8081/api/caminos/floyd-warshall"
+curl "http://localhost:8080/api/caminos/floyd-warshall"
 ```
 
 ```json
@@ -589,7 +589,7 @@ descarta sin explorarla) y **sin poda** (explora todo el árbol de rutas simples
 destino). Ambas variantes devuelven exactamente las mismas rutas; cambia cuántos nodos del árbol de búsqueda se visitan.
 
 ```bash
-curl "http://localhost:8081/api/backtracking/rutas?origen=CABA&destino=QUILMES&maxMinutos=100&maxSaltos=3"
+curl "http://localhost:8080/api/backtracking/rutas?origen=CABA&destino=QUILMES&maxMinutos=100&maxSaltos=3"
 ```
 
 ```json
@@ -658,7 +658,7 @@ mínimo de la red (Floyd-Warshall en memoria antes de ramificar). Máximo 11 des
   (**nodo podado**).
 
 ```bash
-curl "http://localhost:8081/api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR"
+curl "http://localhost:8080/api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR"
 ```
 
 ```json
@@ -729,7 +729,7 @@ servidor.
 | 500 | Error inesperado (mensaje genérico) | `Ocurrió un error interno. Intentá de nuevo más tarde.` |
 
 ```bash
-curl -i "http://localhost:8081/api/recorridos/bfs?origen=ATLANTIDA"
+curl -i "http://localhost:8080/api/recorridos/bfs?origen=ATLANTIDA"
 ```
 
 ```json

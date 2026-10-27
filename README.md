@@ -15,7 +15,7 @@ Todos los algoritmos están implementados desde cero (sin `Collections.sort`, si
 | **Nodo** | Un depósito principal, un centro de distribución o un punto de retiro, ubicado en una localidad real (CABA, Quilmes, Rosario, Corrientes…) |
 | **Arista** | Una ruta física terrestre entre dos nodos. El grafo es **no dirigido**: la ruta se recorre en ambos sentidos |
 | **Costo de la arista** | **Tiempo de viaje en minutos** (entero positivo) |
-| **Ítem** | Una caja de perfumes con un **peso en kg** y un **valor comercial en USD**, que sed entrega en un nodo destino |
+| **Ítem** | Una caja de perfumes con un **peso en kg** y un **valor comercial en USD**, que se entrega en un nodo destino |
 
 Los tiempos de la semilla son estimaciones redondeadas pensadas para trabajar los algoritmos, no para planificar un
 viaje real. Todas las aristas tienen un peso distinto, así el árbol de expansión mínima es único (907 min) y se verifica a mano.
@@ -81,14 +81,12 @@ es el caso donde el greedy falla (ver `GET /api/paquetes/greedy`).
 |-------------------|-------------------|--------|
 | `Acosta Gonzalo` | `gonzaloacosta5` | `1173449` |
 | `Lopez Bautista` | `bautilopezl` | `1172886` |
-| `Margets Lucas` | `[COMPLETAR]` | `1171541` |
+| `Margets Lucas` | `LucasMargets11` | `1171541` |
 
 ## Cómo ejecutarlo
 
-Requisitos: JDK 21, Docker (para Neo4j) y Maven (o el wrapper `./mvnw`).
-
-> **El wrapper de Maven no está incluido.** Copiá `mvnw`, `mvnw.cmd` y la carpeta `.mvn/` del esqueleto de la cátedra,
-> o generalo una vez con `mvn wrapper:wrapper`.
+Requisitos: JDK 21 y Docker (para Neo4j). El Maven Wrapper ya está incluido (`mvnw`, `mvnw.cmd` y `.mvn/`), así que no
+hace falta instalar Maven (en Windows usá `mvnw.cmd` en lugar de `./mvnw`).
 
 1. **Credenciales (nunca en el repositorio).** Copiá la plantilla y completá usuario y contraseña de Neo4j
    (la contraseña debe tener 8 caracteres o más):
@@ -118,7 +116,7 @@ Requisitos: JDK 21, Docker (para Neo4j) y Maven (o el wrapper `./mvnw`).
    ```
 
    Si la base está vacía, la aplicación carga sola la red semilla (12 nodos, 17 rutas, 8 cajas).
-   Comprobación: `curl http://localhost:8081/api/grafo/resumen`.
+   Comprobación: `curl http://localhost:8080/api/grafo/resumen`.
 
 4. **Correr los tests** (no necesitan Neo4j):
 
@@ -163,7 +161,10 @@ controller  ──►  service  ──►  algorithm      (lógica pura, sin Spr
 
 Cada algoritmo tiene su ficha en **[docs/ENDPOINTS.md](docs/ENDPOINTS.md)**: parámetros, JSON de ejemplo
 (salida real sobre la semilla), complejidad temporal y espacial con su justificación, y casos de error.
-
+Todas las URLs usan `http://localhost:8080`, el puerto por defecto de Spring Boot (no se configura otro en
+`application.properties`). La colección de Postman
+**[docs/postman/TPO-Logistica-Perfumeria.postman_collection.json](docs/postman/TPO-Logistica-Perfumeria.postman_collection.json)**
+define la variable `baseUrl` con ese mismo valor.
 | Algoritmo | Endpoint | Complejidad temporal |
 |-----------|----------|----------------------|
 | BFS | `GET /api/recorridos/bfs?origen=CABA` | O(V + E) |
@@ -181,7 +182,7 @@ Cada algoritmo tiene su ficha en **[docs/ENDPOINTS.md](docs/ENDPOINTS.md)**: par
 
 ## Tests
 
-`./mvnw test` ejecuta, con JUnit 5:
+`./mvnw test` ejecuta, con JUnit 5, las 101 pruebas automatizadas (resultado reportado: todas aprobadas):
 
 - Un test por algoritmo (`DijkstraTest`, `FloydWarshallTest`, `MochilaDPTest`, `BacktrackingTest`, `BranchAndBoundTest`, …),
   con casos a mano sobre la semilla, casos borde (nodo aislado, ciclo negativo, capacidad 0, entradas inválidas) y comparaciones
@@ -202,7 +203,9 @@ Cada algoritmo tiene su ficha en **[docs/ENDPOINTS.md](docs/ENDPOINTS.md)**: par
 - **Prompt principal:** se le pidió actuar como desarrollador backend senior en Java 21, Spring Boot 3 y Neo4j, con el
   dominio, las reglas arquitectónicas, los algoritmos y los entregables de la consigna del TPO.
 - **Qué revisó y modificó el grupo:** `[COMPLETAR: qué se leyó, qué se cambió, qué se corrigió]`
-- **Cómo se validó:** `[COMPLETAR: por ejemplo, "corrimos ./mvnw test", "probamos cada endpoint con curl", "verificamos Dijkstra y Kruskal a mano sobre el grafo"]`
+- **Cómo se validó (reportado):** se reportó que las 101 pruebas automatizadas (`./mvnw test`) pasaron. No se
+  documentan pruebas de los endpoints contra una instancia real de Neo4j ni revisiones manuales del código por parte
+  de los integrantes, porque no se realizaron.
 - **Comprensión del código:** el Segundo Parcial es una instancia de código en vivo, sin IA y sin acceso al repositorio.
   Todos los integrantes deben poder explicar y reescribir cada algoritmo (invariante, complejidad, estructuras de datos).
   `[COMPLETAR: quién se encargó de estudiar y defender cada algoritmo]`
