@@ -519,7 +519,7 @@
       ]
     },
     {
-      "name": "12. Branch & Bound",
+      "name": "12. Branch & Bound (orden de entrega)",
       "item": [
         {
           "name": "CABA → QUILMES, LA_PLATA, PILAR",
@@ -553,6 +553,34 @@
             "});",
             "pm.test('Explora menos del 5 % del árbol', () => {",
             "    pm.expect(r.nodosArbolCompleto).to.eql(109601);",
+            "    pm.expect(r.porcentajeDelArbolExplorado).to.be.below(5);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "13. Branch & Bound (reparto de carga)",
+      "item": [
+        {
+          "name": "Cajas en 3 camionetas",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/reparto/cajas?camionetas=3" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('La más cargada lleva 39 kg (el greedy LPT deja 40)', () => {",
+            "    pm.expect(r.cargaMaximaKg).to.eql(39);",
+            "    pm.expect(r.cargaMaximaSolucionInicialKg).to.eql(40);",
+            "    pm.expect(r.cotaInferiorKg).to.eql(38);",
+            "});",
+            "pm.test('Las 3 camionetas llevan las 8 cajas (114 kg)', () => {",
+            "    pm.expect(r.reparto).to.have.lengthOf(3);",
+            "    pm.expect(r.reparto.reduce((s, c) => s + c.paquetes.length, 0)).to.eql(8);",
+            "    pm.expect(r.reparto.reduce((s, c) => s + c.cargaKg, 0)).to.eql(114);",
+            "});",
+            "pm.test('Poda: explora menos del 5 % del árbol', () => {",
+            "    pm.expect(r.nodosArbolCompleto).to.eql(9841);",
+            "    pm.expect(r.nodosPodados).to.be.above(0);",
             "    pm.expect(r.porcentajeDelArbolExplorado).to.be.below(5);",
             "});"
           ]}}]
@@ -612,6 +640,13 @@
         {
           "name": "400 backtracking con origen = destino",
           "request": { "method": "GET", "url": "{{baseUrl}}/api/backtracking/rutas?origen=CABA&destino=CABA" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}]
+        },
+        {
+          "name": "400 camionetas fuera de rango",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/reparto/cajas?camionetas=0" },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
           ]}}]

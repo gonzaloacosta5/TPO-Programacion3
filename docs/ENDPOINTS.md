@@ -31,7 +31,8 @@ muy larga se indica "(abreviado)".
 | 9 | Mochila 0/1 (PD) | `GET /api/paquetes/mochila` | 6 | `MochilaDP` |
 | 10 | Floyd-Warshall | `GET /api/caminos/floyd-warshall`, `/camino`, `/demo-ciclo-negativo` | 7 | `FloydWarshall` |
 | 11 | Backtracking | `GET /api/backtracking/rutas` | 8 | `Backtracking` |
-| 12 | Branch & Bound | `GET /api/reparto/branch-and-bound` | 11 | `BranchAndBound` |
+| 12 | Branch & Bound (orden de entrega) | `GET /api/reparto/branch-and-bound` | 11 | `BranchAndBound` |
+| 13 | Branch & Bound (reparto de carga) | `GET /api/reparto/cajas` | 11 | `BranchAndBoundCarga` |
 
 ---
 
@@ -629,7 +630,7 @@ simples que existen entre esos dos nodos.
 
 ---
 
-## 12. Branch & Bound — optimización del reparto
+## 12. Branch & Bound — orden de entrega del reparto
 
 ### `GET /api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR`
 
@@ -713,6 +714,81 @@ aleatorios que activar la cota **nunca** cambia el costo óptimo respecto de la 
 
 ---
 
+## 13. Branch & Bound — reparto de las cajas entre camionetas
+
+### `GET /api/reparto/cajas?camionetas=3`
+
+| Parámetro | Obligatorio | Descripción |
+|-----------|-------------|-------------|
+| `camionetas` | no (`3`) | Cantidad de camionetas iguales entre las que se reparten las cajas cargadas (1 a 10) |
+
+Reparte **todas** las cajas entre `k` camionetas iguales y minimiza la carga de la **más cargada** (problema de
+*makespan*), para que ninguna salga sobrecargada. Complementa al endpoint anterior: aquel decide en qué orden entregar;
+este, qué lleva cada camioneta. Admite hasta 16 cajas.
+
+**Cómo funciona**
+
+- **Ramificar:** las cajas se ordenan de la más pesada a la más liviana (MergeSort propio); un nodo de nivel `i` ya
+  decidió la camioneta de las primeras `i` cajas, y sus `k` hijos prueban cada camioneta para la caja `i`.
+- **Solución inicial:** el greedy LPT (cada caja, de mayor a menor peso, a la camioneta menos cargada) da la primera
+  cota superior (`cargaMaximaSolucionInicialKg`).
+- **Cota explícita y optimista.** Para un nodo cuyas camionetas llevan las cargas `c_1 … c_k`, con `P` = peso total
+  de las cajas:
+
+  `cota = max( max_j c_j , ⌈P / k⌉ )`
+
+  **Por qué es optimista (nunca sobreestima):** las cargas solo crecen al agregar cajas, así que la camioneta más
+  cargada ya no puede bajar de `max c_j`; y entre las `k` camionetas se reparten `P` kg, así que alguna lleva al
+  menos el promedio `P / k` (al menos `⌈P / k⌉`, porque los pesos son enteros). Ningún reparto que complete el nodo
+  puede quedar por debajo de la cota.
+- **Poda:** si `cota ≥ mejor reparto conocido`, esa rama no puede mejorarlo y se descarta (**nodo podado**).
+
+```bash
+curl "http://localhost:8080/api/reparto/cajas?camionetas=3"
+```
+
+```json
+{
+  "camionetas": 3,
+  "pesoTotalKg": 114,
+  "cargaMaximaKg": 39,
+  "cotaInferiorKg": 38,
+  "reparto": [
+    { "numero": 1, "cargaKg": 37, "paquetes": [ "PQ-04 (25 kg)", "PQ-02 (12 kg)" ] },
+    { "numero": 2, "cargaKg": 38, "paquetes": [ "PQ-06 (20 kg)", "PQ-03 (18 kg)" ] },
+    { "numero": 3, "cargaKg": 39, "paquetes": [ "PQ-05 (15 kg)", "PQ-07 (10 kg)", "PQ-01 (8 kg)", "PQ-08 (6 kg)" ] }
+  ],
+  "cotaActivada": true,
+  "cota": "cota = máximo entre la carga de la camioneta más cargada hasta ahora y el peso total dividido la cantidad de camionetas (redondeado hacia arriba). Es optimista (cota inferior) porque las cargas solo crecen al agregar cajas y alguna camioneta tiene que llevar al menos el promedio.",
+  "cargaMaximaSolucionInicialKg": 40,
+  "nodosExplorados": 155,
+  "nodosPodados": 308,
+  "nodosArbolCompleto": 9841,
+  "porcentajeDelArbolExplorado": 1.575
+}
+```
+
+(`paquetes` abreviado: la respuesta real trae cada caja como objeto completo.)
+
+**Verificación a mano.** Las 8 cajas pesan 114 kg, así que ninguna de las 3 camionetas puede llevar menos de
+⌈114 / 3⌉ = 38 kg. El greedy LPT pone 25, 20 y 18 en camionetas distintas; después 15 va a la de 18 (33), 12 a la de
+20 (32), 10 a la de 25 (35), 8 a la de 32 (40) y 6 a la de 33 (39): la más cargada queda con **40 kg**. Bajar a 38 es
+imposible: las tres tendrían que llevar 38 exactos, y la camioneta de la caja de 25 kg necesitaría otros 13 kg, que
+ninguna combinación de las demás cajas suma. El branch & bound encuentra **39 kg** (37, 38 y 39), el mismo óptimo que la
+fuerza bruta sobre las 3⁸ = 6561 asignaciones posibles, explorando 155 de los 9841 nodos del árbol (1,6 %) y podando
+308 ramas. Los tests verifican en 60 repartos aleatorios que activar la cota **nunca** cambia el óptimo.
+
+**Complejidad**
+
+- **Tiempo, peor caso O(kⁿ)** con n cajas y k camionetas: si la cota no poda nada se recorre todo el árbol, que tiene
+  Σ_{i=0..n} kⁱ nodos (`nodosArbolCompleto`), y cada hijo calcula su cota en O(1) porque la carga máxima se lleva
+  acumulada. Ordenar las cajas con MergeSort cuesta O(n log n) y no cambia el orden.
+- **Espacio O(n + k):** pila de recursión de profundidad n, la asignación actual (n) y las cargas de las camionetas (k).
+- **Estructura:** recursión con un arreglo de cargas (la caja se suma al bajar y se resta al volver: *backtrack*) y la
+  carga máxima acumulada como parámetro. Si el árbol supera 50.000.000 de nodos, responde 422.
+
+---
+
 ## Errores
 
 Todos los errores tienen el mismo formato, sin stack trace ni nombres de clase, y están a cargo de un
@@ -759,7 +835,8 @@ curl -i "http://localhost:8080/api/recorridos/bfs?origen=ATLANTIDA"
 | Mochila 0/1 | dp[i][w] = max(dp[i−1][w], dp[i−1][w−pᵢ] + vᵢ) | Θ(n·W) | Θ(n·W) | Tabla dp `long[n+1][W+1]` |
 | Floyd-Warshall | d_k[i][j] = min(d_{k−1}[i][j], d_{k−1}[i][k] + d_{k−1}[k][j]) | Θ(V³) | Θ(V²) | Matrices de costos y de siguientes |
 | Backtracking | — (árbol de rutas simples) | O(V!) peor caso | O(V) | Recursión + arreglo `enRuta` |
-| Branch & Bound | — (árbol de permutaciones parciales) | O(k!·k²) peor caso | O(k²) | Recursión + máscara de bits + matriz de costos |
+| Branch & Bound (orden de entrega) | — (árbol de permutaciones parciales) | O(k!·k²) peor caso (k destinos) | O(k²) | Recursión + máscara de bits + matriz de costos |
+| Branch & Bound (reparto de carga) | — (árbol de asignaciones caja → camioneta) | O(kⁿ) peor caso (n cajas, k camionetas) | O(n + k) | Recursión + arreglo de cargas + carga máxima acumulada |
 
 ## Reglas de la consigna y cómo se cumplen
 

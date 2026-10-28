@@ -1,6 +1,7 @@
 package com.perfumeria.logistica.service;
 
 import com.perfumeria.logistica.algorithm.BranchAndBound;
+import com.perfumeria.logistica.algorithm.BranchAndBoundCarga;
 import com.perfumeria.logistica.algorithm.Greedy;
 import com.perfumeria.logistica.algorithm.ResultadoMst;
 import com.perfumeria.logistica.exception.RecursoNoEncontradoException;
@@ -218,5 +219,21 @@ class ServiciosTest {
         RepartoService sinCajas = new RepartoService(grafoService,
                 new RepositorioEnMemoria(DatosSemilla.nodos(), DatosSemilla.rutas(), List.of()));
         assertThrows(SolicitudInvalidaException.class, () -> sinCajas.optimizar("CABA", null));
+    }
+
+    @Test
+    @DisplayName("Reparto de las cajas en 3 camionetas: la más cargada lleva 39 kg; valida la cantidad de camionetas")
+    void repartoDeCajas() {
+        BranchAndBoundCarga.Resultado r = reparto.repartirCajas(3);
+        assertEquals(39L, r.cargaMaximaKg());
+        assertEquals(3, r.reparto().size());
+        assertTrue(r.nodosPodados() > 0);
+        assertThrows(SolicitudInvalidaException.class, () -> reparto.repartirCajas(0));
+        assertThrows(SolicitudInvalidaException.class,
+                () -> reparto.repartirCajas(BranchAndBoundCarga.MAX_CAMIONETAS + 1));
+
+        RepartoService sinCajas = new RepartoService(grafoService,
+                new RepositorioEnMemoria(DatosSemilla.nodos(), DatosSemilla.rutas(), List.of()));
+        assertThrows(SolicitudInvalidaException.class, () -> sinCajas.repartirCajas(3));
     }
 }
