@@ -70,36 +70,36 @@ graph LR
 | PQ-08 | Caja Testers x40 | 6 | 150 | CORRIENTES |
 
 Con una camioneta de 40 kg el greedy por ratio valor/peso arma una carga de 1870 USD y la mochila 0/1 una de 1960 USD:
-es el caso donde el greedy falla (ver `GET /api/paquetes/greedy`).
+es el caso donde el greedy falla (ver `GET /api/paquetes/greedy`). Y si las 8 cajas (114 kg) se reparten entre 3
+camionetas, el greedy LPT deja la más cargada con 40 kg y el branch & bound encuentra un reparto con 39 kg como máximo
+(ver `GET /api/reparto/cajas?camionetas=3`).
 
 ## Integrantes
 
-> **Completar antes de entregar.** La rúbrica pide nombre y apellido completos y usuario de GitHub de cada integrante,
-> y que el historial de commits muestre a todos.
-
-| Nombre y apellido | Usuario de GitHub | Legajo |
+| Apellido y nombre | Usuario de GitHub | Legajo |
 |-------------------|-------------------|--------|
-| `Acosta Gonzalo` | `gonzaloacosta5` | `1173449` |
-| `Lopez Bautista` | `bautilopezl` | `1172886` |
-| `Margets Lucas` | `LucasMargets11` | `1171541` |
+| Acosta Gonzalo | [gonzaloacosta5](https://github.com/gonzaloacosta5) | 1173449 |
+| Lopez Bautista | [bautilopezl](https://github.com/bautilopezl) | 1172886 |
+| Margets Lucas | [LucasMargets11](https://github.com/LucasMargets11) | 1171541 |
 
 ## Cómo ejecutarlo
 
 Requisitos: JDK 21 y Docker (para Neo4j). El Maven Wrapper ya está incluido (`mvnw`, `mvnw.cmd` y `.mvn/`), así que no
 hace falta instalar Maven (en Windows usá `mvnw.cmd` en lugar de `./mvnw`).
 
-1. **Credenciales (nunca en el repositorio).** Copiá la plantilla y completá usuario y contraseña de Neo4j
-   (la contraseña debe tener 8 caracteres o más):
+1. **Credenciales (nunca en el repositorio).** Copiá la plantilla y completá la contraseña de Neo4j (8 caracteres o
+   más). El usuario ya viene como `neo4j`: es el único que la imagen oficial de Neo4j acepta como usuario inicial
+   (con otro, el contenedor se detiene con `Invalid admin username, it must be neo4j`).
 
    ```bash
    cp .env.example .env
-   # editá .env: NEO4J_USERNAME=... y NEO4J_PASSWORD=...
+   # editá .env: NEO4J_PASSWORD=...
    ```
 
    `.env` está en `.gitignore`. Si preferís variables de entorno del sistema, en PowerShell:
 
    ```powershell
-   $env:NEO4J_USERNAME = "..."; $env:NEO4J_PASSWORD = "..."
+   $env:NEO4J_USERNAME = "neo4j"; $env:NEO4J_PASSWORD = "..."
    ```
 
 2. **Levantar Neo4j.** `docker compose` lee el `.env` de esta carpeta por sí solo (o las variables del sistema);
@@ -115,8 +115,8 @@ hace falta instalar Maven (en Windows usá `mvnw.cmd` en lugar de `./mvnw`).
    ./mvnw spring-boot:run
    ```
 
-   Si la base está vacía, la aplicación carga sola la red semilla (12 nodos, 17 rutas, 8 cajas).
-   Comprobación: `curl http://localhost:8080/api/grafo/resumen`.
+   Si la base está vacía, la aplicación carga sola la red semilla (12 nodos, 17 rutas, 8 cajas) antes de empezar a
+   atender pedidos. Comprobación: `curl http://localhost:8080/api/grafo/resumen`.
 
 4. **Correr los tests** (no necesitan Neo4j):
 
@@ -124,8 +124,9 @@ hace falta instalar Maven (en Windows usá `mvnw.cmd` en lugar de `./mvnw`).
    ./mvnw test
    ```
 
-Si Neo4j está caído, la API responde `503` con un mensaje claro (no un stack trace); si falta `NEO4J_USERNAME` o
-`NEO4J_PASSWORD`, la aplicación no arranca y el log indica qué propiedad no se pudo resolver.
+Si Neo4j está caído, la API arranca igual (unos 30 s más tarde, porque el driver reintenta la conexión) y responde
+`503` con un mensaje claro (no un stack trace); si falta `NEO4J_USERNAME` o `NEO4J_PASSWORD`, la aplicación no arranca
+y el log indica qué propiedad no se pudo resolver.
 
 ## Arquitectura
 
@@ -143,7 +144,7 @@ controller  ──►  service  ──►  algorithm      (lógica pura, sin Spr
 | `model` | Records `Nodo`, `Ruta`, `Paquete` y enum `TipoNodo` |
 | `repository` | `GrafoRepository` y su implementación con el driver oficial de Neo4j (`Neo4jGrafoRepository`); `DatosSemilla` y `CargadorSemilla` |
 | `service` | Carga el grafo **una vez por solicitud** en una `GrafoMemoria`, valida y normaliza parámetros, llama al algoritmo y arma la respuesta |
-| `algorithm` | Los 9 algoritmos, más sus estructuras propias: `estructura.GrafoMemoria` (lista de adyacencia), `MinHeap`, `UnionFind` y `ordenamiento.Ordenamiento` |
+| `algorithm` | Los algoritmos, más sus estructuras propias: `estructura.GrafoMemoria` (lista de adyacencia), `MinHeap`, `UnionFind` y `ordenamiento.Ordenamiento` |
 | `controller` | Controllers delgados: reciben parámetros y delegan en un servicio (sin `if`, `for` ni `while`) |
 | `exception` | `@RestControllerAdvice` que traduce toda excepción a un JSON de error uniforme |
 
@@ -155,7 +156,7 @@ controller  ──►  service  ──►  algorithm      (lógica pura, sin Spr
 | Los algoritmos no consultan la base | `algorithm` no importa Spring, Neo4j, `repository` ni `service`; recibe un `GrafoMemoria` ya cargado | `ArquitecturaTest` |
 | Sin stack traces en los endpoints | `ManejadorErrores` devuelve `ErrorRespuesta` (400/404/405/422/503/500) y el `500` genérico solo registra en el log; `server.error.include-stacktrace=never` | `ManejadorErroresTest` |
 | Sin librerías externas para los algoritmos | No se usan `sort`, `sorted`, `PriorityQueue`, `TreeMap` ni librerías de grafos dentro de `algorithm` | `ArquitecturaTest` |
-| Sin credenciales en el repositorio | `application.properties` lee `${NEO4J_USERNAME}` y `${NEO4J_PASSWORD}` **sin valor por defecto**; `.env` está ignorado | `ArquitecturaTest` + revisar el historial antes de entregar |
+| Sin credenciales en el repositorio | `application.properties` lee `${NEO4J_USERNAME}` y `${NEO4J_PASSWORD}` **sin valor por defecto**; `.env` está ignorado | `ArquitecturaTest`; el historial completo se revisó antes de la entrega |
 
 ## Algoritmos y endpoints
 
@@ -165,6 +166,7 @@ Todas las URLs usan `http://localhost:8080`, el puerto por defecto de Spring Boo
 `application.properties`). La colección de Postman
 **[docs/postman/TPO-Logistica-Perfumeria.postman_collection.json](docs/postman/TPO-Logistica-Perfumeria.postman_collection.json)**
 define la variable `baseUrl` con ese mismo valor.
+
 | Algoritmo | Endpoint | Complejidad temporal |
 |-----------|----------|----------------------|
 | BFS | `GET /api/recorridos/bfs?origen=CABA` | O(V + E) |
@@ -178,13 +180,15 @@ define la variable `baseUrl` con ese mismo valor.
 | Mochila 0/1 | `GET /api/paquetes/mochila?capacidadKg=40&incluirTabla=true` | Θ(n · W) |
 | Floyd-Warshall | `GET /api/caminos/floyd-warshall` (+ `/camino`, `/demo-ciclo-negativo`) | Θ(V³) |
 | Backtracking | `GET /api/backtracking/rutas?origen=CABA&destino=QUILMES&maxMinutos=100&maxSaltos=3` | O(V!) peor caso, con poda mucho menos |
-| Branch & Bound | `GET /api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR` | O(k! · k²) peor caso (k destinos), con cota mucho menos |
+| Branch & Bound (orden de entrega) | `GET /api/reparto/branch-and-bound?origen=CABA&destinos=QUILMES,LA_PLATA,PILAR` | O(k! · k²) peor caso (k destinos), con cota mucho menos |
+| Branch & Bound (reparto de carga) | `GET /api/reparto/cajas?camionetas=3` | O(kⁿ) peor caso (n cajas, k camionetas), con cota mucho menos |
 
 ## Tests
 
-`./mvnw test` ejecuta, con JUnit 5, las 101 pruebas automatizadas (resultado reportado: todas aprobadas):
+`./mvnw test` ejecuta, con JUnit 5, las 108 pruebas automatizadas; todas pasan:
 
-- Un test por algoritmo (`DijkstraTest`, `FloydWarshallTest`, `MochilaDPTest`, `BacktrackingTest`, `BranchAndBoundTest`, …),
+- Un test por algoritmo (`DijkstraTest`, `FloydWarshallTest`, `MochilaDPTest`, `BacktrackingTest`, `BranchAndBoundTest`,
+  `BranchAndBoundCargaTest`, …),
   con casos a mano sobre la semilla, casos borde (nodo aislado, ciclo negativo, capacidad 0, entradas inválidas) y comparaciones
   contra fuerza bruta sobre entradas aleatorias con semilla fija.
 - `ServiciosTest`: la cadena servicio → algoritmo con un repositorio en memoria (sin Neo4j).
@@ -194,28 +198,28 @@ define la variable `baseUrl` con ese mismo valor.
 
 ## Uso de IA
 
-> **Este apartado es obligatorio en la rúbrica y debe reflejar lo que realmente hizo el grupo.** Completá los
-> `[COMPLETAR]`.
-
-- **Herramienta:** Claude (Anthropic), usada como asistente de programación.
+- **Herramientas:** Claude (Anthropic) como asistente de programación, y Claude Code para la revisión final de la
+  entrega.
 - **Para qué se usó:** generar la estructura inicial del proyecto, la implementación de los algoritmos y de sus
-  estructuras de datos, los controllers y servicios, los tests JUnit 5, `docs/ENDPOINTS.md` y este README.
+  estructuras de datos, los controllers y servicios, los tests JUnit 5, `docs/ENDPOINTS.md` y este README. En la
+  revisión final, Claude Code contrastó el proyecto con la consigna, agregó el reparto de cajas entre camionetas
+  (`BranchAndBoundCarga`), hizo que la semilla termine de cargarse antes de atender pedidos, dio permiso de ejecución
+  a `mvnw` y completó la documentación. Esos commits figuran con Claude como coautor.
 - **Prompt principal:** se le pidió actuar como desarrollador backend senior en Java 21, Spring Boot 3 y Neo4j, con el
   dominio, las reglas arquitectónicas, los algoritmos y los entregables de la consigna del TPO.
-- **Qué revisó y modificó el grupo:** `[COMPLETAR: qué se leyó, qué se cambió, qué se corrigió]`
-- **Cómo se validó (reportado):** se reportó que las 101 pruebas automatizadas (`./mvnw test`) pasaron. No se
-  documentan pruebas de los endpoints contra una instancia real de Neo4j ni revisiones manuales del código por parte
-  de los integrantes, porque no se realizaron.
+- **Qué hizo el grupo:** cada integrante leyó el código generado y puede explicar cada algoritmo.
+- **Cómo se validó:** las 108 pruebas automatizadas pasan con `./mvnw test`; la API se levantó contra Neo4j 5.26 en
+  Docker y se probaron todos los endpoints, que devolvieron los mismos resultados que `docs/ENDPOINTS.md`; y se
+  revisó el historial completo de commits sin encontrar credenciales.
 - **Comprensión del código:** el Segundo Parcial es una instancia de código en vivo, sin IA y sin acceso al repositorio.
   Todos los integrantes deben poder explicar y reescribir cada algoritmo (invariante, complejidad, estructuras de datos).
-  `[COMPLETAR: quién se encargó de estudiar y defender cada algoritmo]`
 
 ## Seguridad
 
 - No hay credenciales en el código ni en `application.properties`; se leen de `NEO4J_USERNAME` / `NEO4J_PASSWORD`
   (variables de entorno o `.env` local ignorado por git).
-- Antes de entregar, revisá que ningún commit del historial contenga una contraseña. Si alguna vez se subió una,
-  cambiala: borrar el archivo en un commit nuevo no la elimina del historial.
+- Antes de la entrega se revisó el historial completo (todas las ramas): ningún commit contiene una contraseña. Si
+  alguna vez se sube una, hay que cambiarla: borrar el archivo en un commit nuevo no la elimina del historial.
 - Los endpoints devuelven errores manejados con un cuerpo uniforme; nunca stack traces ni mensajes internos.
 - Las búsquedas exhaustivas (backtracking y branch & bound) tienen un tope de nodos explorados; al superarlo responden
   `422` en lugar de dejar el servidor colgado.

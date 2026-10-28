@@ -1,6 +1,7 @@
 package com.perfumeria.logistica.service;
 
 import com.perfumeria.logistica.algorithm.BranchAndBound;
+import com.perfumeria.logistica.algorithm.BranchAndBoundCarga;
 import com.perfumeria.logistica.algorithm.estructura.GrafoMemoria;
 import com.perfumeria.logistica.exception.SolicitudInvalidaException;
 import com.perfumeria.logistica.model.Paquete;
@@ -59,5 +60,18 @@ public class RepartoService {
             arreglo[i++] = d;
         }
         return BranchAndBound.optimizarReparto(g, o, arreglo, true);
+    }
+
+    /** Reparte las cajas cargadas entre {@code camionetas} camionetas iguales, minimizando la más cargada. */
+    public BranchAndBoundCarga.Resultado repartirCajas(int camionetas) {
+        if (camionetas < 1 || camionetas > BranchAndBoundCarga.MAX_CAMIONETAS) {
+            throw new SolicitudInvalidaException(
+                    "camionetas debe estar entre 1 y " + BranchAndBoundCarga.MAX_CAMIONETAS);
+        }
+        List<Paquete> cajas = repositorio.obtenerPaquetes();
+        if (cajas.isEmpty()) {
+            throw new SolicitudInvalidaException("No hay cajas cargadas para repartir");
+        }
+        return BranchAndBoundCarga.repartir(cajas, camionetas, true);
     }
 }

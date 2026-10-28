@@ -1,6 +1,7 @@
 package com.perfumeria.logistica.controller;
 
 import com.perfumeria.logistica.algorithm.BranchAndBound;
+import com.perfumeria.logistica.algorithm.BranchAndBoundCarga;
 import com.perfumeria.logistica.service.RepartoService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,5 +26,12 @@ public class RepartoController {
             @RequestParam(name = "origen", defaultValue = "CABA") String origen,
             @RequestParam(name = "destinos", required = false) List<String> destinos) {
         return servicio.optimizar(origen, destinos);
+    }
+
+    /** Reparte las cajas cargadas entre {@code camionetas} camionetas iguales, minimizando la más cargada. */
+    @GetMapping("/cajas")
+    public BranchAndBoundCarga.Resultado repartirCajas(
+            @RequestParam(name = "camionetas", defaultValue = "3") int camionetas) {
+        return servicio.repartirCajas(camionetas);
     }
 }
